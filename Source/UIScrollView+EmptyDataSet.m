@@ -543,6 +543,8 @@ static NSString *const DZNSwizzleInfoPointerKey = @"pointer";
 static NSString *const DZNSwizzleInfoOwnerKey = @"owner";
 static NSString *const DZNSwizzleInfoSelectorKey = @"selector";
 
+static NSString *const kContentSizeKeyPath = @"contentSize";
+
 // Based on Bryce Buchanan's swizzling technique http://blog.newrelic.com/2014/04/16/right-way-to-swizzle/
 // And Juzzin's ideas https://github.com/juzzin/JUSEmptyViewController
 
@@ -679,15 +681,54 @@ NSString *dzn_implementationKey(id target, SEL selector)
     return self;
 }
 
+- (void)dealloc
+{
+    [self removeKVObserver];
+}
+
 - (void)didMoveToSuperview
 {
-    self.frame = self.superview.bounds;
+    UIScrollView *superView = (UIScrollView *)self.superview;
+    self.frame = CGRectMake(0, 0, superView.contentSize.width, superView.contentSize.height);
     
     [UIView animateWithDuration:0.25
                      animations:^{_contentView.alpha = 1.0;}
                      completion:NULL];
+    
+    [self registerKVObserver];
 }
 
+#pragma KVO Observer
+
+- (void)registerKVObserver
+{
+    [self.superview addObserver:self
+                     forKeyPath:kContentSizeKeyPath
+                        options:(NSKeyValueObservingOptionNew)
+                        context:NULL];
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath
+                      ofObject:(id)object
+                        change:(NSDictionary *)change
+                       context:(void *)context
+{
+    if ([keyPath isEqual:kContentSizeKeyPath]) {
+        id newValue = change[NSKeyValueChangeNewKey];
+        if (newValue) {
+            CGSize newContentSize = [newValue CGSizeValue];
+            if (newContentSize.height > 0) {
+                self.frame = CGRectMake(0, 0, newContentSize.width, newContentSize.height);
+            }
+        }
+    }
+}
+
+- (void)removeKVObserver
+{
+    [self.superview removeObserver:self
+                        forKeyPath:kContentSizeKeyPath];
+}
 
 #pragma mark - Getters
 
@@ -872,6 +913,9 @@ NSString *dzn_implementationKey(id target, SEL selector)
     
     // If applicable, set the custom view's constraints
     if (_customView) {
+        // first, set contentView vertical constraint
+        [self addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[contentView]|" options:0 metrics:nil views:@{@"contentView": self.contentView}]];
+        
         [self.contentView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[customView]|" options:0 metrics:nil views:@{@"customView":_customView}]];
         [self.contentView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[customView]|" options:0 metrics:nil views:@{@"customView":_customView}]];
     }
@@ -960,22 +1004,22 @@ NSString *dzn_implementationKey(id target, SEL selector)
     }
 }
 
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event
-{
-    UIView *hitView = [super hitTest:point withEvent:event];
-    
-    // Return any UIControl instance such as buttons, segmented controls, switches, etc.
-    if ([hitView isKindOfClass:[UIControl class]]) {
-        return hitView;
-    }
-    
-    // Return either the contentView or customView
-    if ([hitView isEqual:_contentView] || [hitView isEqual:_customView]) {
-        return hitView;
-    }
-    
-    return nil;
-}
+//- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event
+//{
+//    UIView *hitView = [super hitTest:point withEvent:event];
+//    
+//    // Return any UIControl instance such as buttons, segmented controls, switches, etc.
+//    if ([hitView isKindOfClass:[UIControl class]]) {
+//        return hitView;
+//    }
+//    
+//    // Return either the contentView or customView
+//    if ([hitView isEqual:_contentView] || [hitView isEqual:_customView]) {
+//        return hitView;
+//    }
+//    
+//    return nil;
+//}
 
 @end
 
