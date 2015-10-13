@@ -698,6 +698,13 @@ NSString *dzn_implementationKey(id target, SEL selector)
     [self registerKVObserver];
 }
 
+- (void)willMoveToSuperview:(UIView *)newSuperview
+{
+    if (newSuperview == nil) {
+        [self removeKVObserver];
+    }
+}
+
 #pragma KVO Observer
 
 - (void)registerKVObserver
